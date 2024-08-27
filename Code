@@ -1,0 +1,61 @@
+const express = require('express');
+const axios = require('axios');
+
+const app = express();
+const windowSize = 10;
+const storedNumbers = [];
+const windowPrevState = [];
+
+// Middleware to handle errors and timeouts
+const timeoutMiddleware = (req, res, next) => {
+  req.setTimeout(500, () => {
+    const err = new Error('Timeout');
+    err.status = 408;
+    next(err);
+  });
+  next();
+};
+
+app.use(timeoutMiddleware);
+
+// API endpoint to handle qualified number IDs
+app.get('/numbers/:numberid', async (req, res) => {
+  const numberId = req.params.numberid;
+  const url = `https://test-server-api.com/${numberId}`; // Replace with the actual Test Server API URL
+
+  try {
+    const response = await axios.get(url);
+    const numbers = response.data;
+
+    // Store unique numbers and limit to window size
+    const newNumbers = numbers.filter((num) => !storedNumbers.includes(num));
+    storedNumbers.push(...newNumbers);
+    if (storedNumbers.length > windowSize) {
+      storedNumbers.shift();
+    }
+
+    // Calculate average if stored numbers are fewer than window size
+    let average;
+    if (storedNumbers.length < windowSize) {
+      average = storedNumbers.reduce((sum, num) => sum + num, 0) / storedNumbers.length;
+    }
+
+    // Respond with previous and current window states, numbers, and average
+    res.json({
+      windowPrevState,
+      windowCurrState: storedNumbers,
+      numbers,
+      avg: average,
+    });
+
+    // Update previous window state
+    windowPrevState = storedNumbers.slice();
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.listen(3000, () => {
+  console.log('Server listening on port 3000');
+});
